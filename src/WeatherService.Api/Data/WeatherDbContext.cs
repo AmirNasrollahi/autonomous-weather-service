@@ -3,12 +3,8 @@ using WeatherService.Api.Data.Entities;
 
 namespace WeatherService.Api.Data;
 
-public sealed class WeatherDbContext : DbContext
+public class WeatherDbContext(DbContextOptions<WeatherDbContext> options) : DbContext(options)
 {
-    public WeatherDbContext(DbContextOptions<WeatherDbContext> options) : base(options)
-    {
-    }
-
     public DbSet<WeatherRecord> WeatherRecords => Set<WeatherRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
