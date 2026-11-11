@@ -488,6 +488,10 @@ $RECYCLE.BIN/
 *.db-wal
 *.db-shm
 
+# Archives
+*.zip
+
+
 # Application Logs
 logs/
 *.log

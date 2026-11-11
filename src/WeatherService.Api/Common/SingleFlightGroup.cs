@@ -4,27 +4,46 @@ namespace WeatherService.Api.Common;
 
 public class SingleFlightGroup
 {
-    private readonly ConcurrentDictionary<string, Task<string?>> _calls = new();
+    private readonly ConcurrentDictionary<string, Lazy<Task<string?>>> _calls = new();
 
-    public async Task<string?> DoAsync(string key, Func<Task<string?>> factory, CancellationToken callerCancellationToken = default)
+    public async Task<string?> DoAsync(
+        string key,
+        Func<Task<string?>> factory,
+        CancellationToken callerCancellationToken = default)
     {
-        Task<string?> task = _calls.GetOrAdd(key, _ =>
+        Lazy<Task<string?>>? lazy = null;
+
+        lazy = _calls.GetOrAdd(
+            key,
+            callKey => new Lazy<Task<string?>>(
+                () => Task.Run(async () =>
+                {
+                    try
+                    {
+                        return await factory();
+                    }
+                    finally
+                    {
+                        _calls.TryRemove(new KeyValuePair<string, Lazy<Task<string?>>>(callKey, lazy!));
+                    }
+                }),
+                LazyThreadSafetyMode.ExecutionAndPublication));
+
+        try
         {
-            Task<string?> sharedTask = Task.Run(async () =>
+            return await lazy.Value.WaitAsync(callerCancellationToken);
+        }
+        catch (OperationCanceledException) when (callerCancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            if (lazy.IsValueCreated && (lazy.Value.IsFaulted || lazy.Value.IsCanceled))
             {
-                try
-                {
-                    return await factory();
-                }
-                finally
-                {
-                    _calls.TryRemove(key, out Task<string?>? _);
-                }
-            });
-
-            return sharedTask;
-        });
-
-        return await task.WaitAsync(callerCancellationToken);
+                _calls.TryRemove(new KeyValuePair<string, Lazy<Task<string?>>>(key, lazy));
+            }
+            throw;
+        }
     }
 }
